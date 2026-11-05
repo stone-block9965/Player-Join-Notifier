@@ -1,0 +1,30 @@
+{
+  "player_join_notifier.notification.title": "Minecraft - A player joined",
+  "player_join_notifier.notification.body": "{player} joined the server.",
+
+  "player_join_notifier.command.list.empty": "No servers are registered. Use /joinnotify add <address> to add one.",
+  "player_join_notifier.command.list.header": "Registered servers (%s):",
+  "player_join_notifier.command.list.entry": " - %s  → %s",
+  "player_join_notifier.command.list.entry_invalid": " - %s  (invalid address, ignored)",
+
+  "player_join_notifier.command.status.enabled": "Mod: %s",
+  "player_join_notifier.command.status.server": "Connected to: %s",
+  "player_join_notifier.command.status.server_unknown": "(singleplayer / unknown)",
+  "player_join_notifier.command.status.session": "Join notifications on this server: %s",
+  "player_join_notifier.command.status.config": "Config file: %s",
+  "player_join_notifier.command.state.on": "enabled",
+  "player_join_notifier.command.state.off": "disabled",
+
+  "player_join_notifier.command.add.added": "Added: %s",
+  "player_join_notifier.command.add.duplicate": "Already registered: %s",
+  "player_join_notifier.command.add.invalid": "Invalid address format: %s",
+  "player_join_notifier.command.add.no_server": "You are not connected to a multiplayer server. Specify one with /joinnotify add <address>.",
+
+  "player_join_notifier.command.remove.removed": "Removed: %s",
+  "player_join_notifier.command.remove.not_found": "Not registered: %s",
+
+  "player_join_notifier.command.reload.ok": "Config reloaded (%s registered servers).",
+  "player_join_notifier.command.reload.failed": "Failed to read the config file. Check the log; the previous settings stay in effect.",
+
+  "player_join_notifier.command.test.sent": "Test notification sent. If nothing appears, check the game log (PlayerJoinNotifier)."
+}

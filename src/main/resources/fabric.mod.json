@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "player_join_notifier",
+  "version": "${version}",
+  "name": "Player Join Notifier",
+  "description": "A client-side mod that notifies you with desktop notifications when other players join.",
+  "authors": ["stone_block9965"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.playerjoinnotifier.PlayerJoinNotifierMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
