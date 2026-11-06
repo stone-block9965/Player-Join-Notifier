@@ -31,6 +31,8 @@ public final class PlayerJoinNotifierMod implements ClientModInitializer {
 	public static final String MOD_ID = "player_join_notifier";
 	private static final Logger LOGGER = LoggerFactory.getLogger("PlayerJoinNotifier");
 
+	private static PlayerJoinNotifierMod instance;
+
 	private ConfigManager configManager;
 	private DesktopNotifier notifier;
 	private JoinDetector detector = new JoinDetector(0, 0);
@@ -45,6 +47,8 @@ public final class PlayerJoinNotifierMod implements ClientModInitializer {
 		configManager = new ConfigManager(
 				FabricLoader.getInstance().getConfigDir().resolve(MOD_ID + ".json"), LOGGER);
 		configManager.load();
+		Texts.bind(configManager);
+		instance = this;
 		notifier = new DesktopNotifier(LOGGER);
 
 		ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
@@ -111,6 +115,11 @@ public final class PlayerJoinNotifierMod implements ClientModInitializer {
 	}
 
 	// ------------------------------------------------------------------ コマンドからの利用
+
+	/** The running mod instance (for the Mod Menu screens). Null before initialization. */
+	static PlayerJoinNotifierMod get() {
+		return instance;
+	}
 
 	ConfigManager config() {
 		return configManager;

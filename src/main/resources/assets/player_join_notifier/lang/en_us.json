@@ -1,12 +1,10 @@
 {
   "player_join_notifier.notification.title": "Minecraft - A player joined",
   "player_join_notifier.notification.body": "{player} joined the server.",
-
   "player_join_notifier.command.list.empty": "No servers are registered. Use /joinnotify add <address> to add one.",
   "player_join_notifier.command.list.header": "Registered servers (%s):",
   "player_join_notifier.command.list.entry": " - %s  → %s",
   "player_join_notifier.command.list.entry_invalid": " - %s  (invalid address, ignored)",
-
   "player_join_notifier.command.status.enabled": "Mod: %s",
   "player_join_notifier.command.status.server": "Connected to: %s",
   "player_join_notifier.command.status.server_unknown": "(singleplayer / unknown)",
@@ -14,17 +12,38 @@
   "player_join_notifier.command.status.config": "Config file: %s",
   "player_join_notifier.command.state.on": "enabled",
   "player_join_notifier.command.state.off": "disabled",
-
   "player_join_notifier.command.add.added": "Added: %s",
   "player_join_notifier.command.add.duplicate": "Already registered: %s",
   "player_join_notifier.command.add.invalid": "Invalid address format: %s",
   "player_join_notifier.command.add.no_server": "You are not connected to a multiplayer server. Specify one with /joinnotify add <address>.",
-
   "player_join_notifier.command.remove.removed": "Removed: %s",
   "player_join_notifier.command.remove.not_found": "Not registered: %s",
-
   "player_join_notifier.command.reload.ok": "Config reloaded (%s registered servers).",
   "player_join_notifier.command.reload.failed": "Failed to read the config file. Check the log; the previous settings stay in effect.",
-
-  "player_join_notifier.command.test.sent": "Test notification sent. If nothing appears, check the game log (PlayerJoinNotifier)."
+  "player_join_notifier.command.test.sent": "Test notification sent. If nothing appears, check the game log (PlayerJoinNotifier).",
+  "player_join_notifier.command.language.current": "Language: %s",
+  "player_join_notifier.command.language.set": "Language set to: %s",
+  "player_join_notifier.command.language.auto_value": "auto (currently %s)",
+  "player_join_notifier.command.settings.header": "Settings:",
+  "player_join_notifier.command.settings.line": " - %s = %s",
+  "player_join_notifier.command.settings.changed": "%s is now %s (saved)",
+  "player_join_notifier.gui.title": "Player Join Notifier",
+  "player_join_notifier.gui.hint": "Changes are saved automatically.",
+  "player_join_notifier.gui.on": "ON",
+  "player_join_notifier.gui.off": "OFF",
+  "player_join_notifier.gui.enabled": "Notifications: %s",
+  "player_join_notifier.gui.only_unfocused": "Only when the game is unfocused: %s",
+  "player_join_notifier.gui.language": "Language: %s",
+  "player_join_notifier.gui.servers": "Servers...",
+  "player_join_notifier.gui.done": "Done",
+  "player_join_notifier.gui.back": "Back",
+  "player_join_notifier.gui.servers.title": "Registered servers",
+  "player_join_notifier.gui.servers.empty": "No servers are registered.",
+  "player_join_notifier.gui.servers.remove": "Remove",
+  "player_join_notifier.gui.servers.add": "Add",
+  "player_join_notifier.gui.servers.input_label": "Server address (same as in the multiplayer screen):",
+  "player_join_notifier.gui.servers.page": "Page %s / %s",
+  "player_join_notifier.gui.servers.invalid": "(invalid address)",
+  "modmenu.descriptionTranslation.player_join_notifier": "Shows an OS desktop notification when other players join a server you registered. Client-side only.",
+  "modmenu.summaryTranslation.player_join_notifier": "Desktop notifications when other players join."
 }

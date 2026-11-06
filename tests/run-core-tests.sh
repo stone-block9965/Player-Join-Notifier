@@ -7,4 +7,4 @@ WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 if command -v javac >/dev/null 2>&1; then JAVAC=(javac); else JAVAC=(java -m jdk.compiler/com.sun.tools.javac.Main); fi
 CORE=$(find src/main/java/dev/playerjoinnotifier/core src/main/java/dev/playerjoinnotifier/dbus src/main/java/dev/playerjoinnotifier/platform -name '*.java')
 "${JAVAC[@]}" -encoding UTF-8 -d "$WORK" $CORE tests/CoreSelfTest.java
-java -Dfile.encoding=UTF-8 -cp "$WORK" CoreSelfTest
+java -Dfile.encoding=UTF-8 -cp "$WORK:src/main/resources" CoreSelfTest

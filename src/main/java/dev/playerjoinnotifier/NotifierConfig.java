@@ -1,5 +1,7 @@
 package dev.playerjoinnotifier;
 
+import dev.playerjoinnotifier.core.Translator;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,6 +12,9 @@ public final class NotifierConfig {
 
 	/** 通知対象サーバーのアドレス（サーバー一覧に入力しているものと同じ書き方）。空なら何も通知しない。 */
 	public List<String> servers = new ArrayList<>();
+
+	/** Language of the mod's own text: "auto" (follow the game language), "en" or "ja". */
+	public String language = "auto";
 
 	/** If true, only notify while the Minecraft window is not focused. Default false = always notify. */
 	public boolean onlyWhenUnfocused = false;
@@ -39,6 +44,8 @@ public final class NotifierConfig {
 		}
 		servers.removeIf(s -> s == null);
 		NotifierConfig d = new NotifierConfig();
+		String lang = Translator.normalizeSetting(language);
+		language = lang == null ? d.language : lang;
 		if (title == null || title.isBlank()) {
 			title = d.title;
 		}

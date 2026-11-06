@@ -7,7 +7,8 @@ A client-only Fabric mod that shows an OS desktop notification whenever **anothe
 - No server-side installation needed — it works from the client alone
 - No extra libraries. Linux talks to D-Bus directly from Java, Windows uses the JDK's built-in tray notifications, and macOS uses the OS-provided `osascript` (no `notify-send` or other extra commands required)
 - It never communicates with servers or any external service
-- In-game messages follow the game language (English and Japanese are included; English is the fallback)
+- English and Japanese included. The language follows the game language automatically, and you can change it with `/joinnotify language` or in Mod Menu
+- Settings can be changed in game (`/joinnotify settings ...`) or in [Mod Menu](https://modrinth.com/mod/modmenu) (optional), and are always saved permanently
 
 ## Requirements
 
@@ -15,6 +16,7 @@ A client-only Fabric mod that shows an OS desktop notification whenever **anothe
 |---|---|
 | Minecraft | Java Edition 26.3 |
 | Mod loader | Fabric Loader 0.19.5 or newer + Fabric API (built against `0.165.2+26.3`) |
+| Mod Menu | Optional. Adds a settings screen (built against Mod Menu 21.0.0 for 26.3) |
 | Java | 25 (required by Minecraft 26.x) |
 | OS | Linux / Windows 10 & 11 / macOS (see below) |
 
@@ -23,7 +25,7 @@ A client-only Fabric mod that shows an OS desktop notification whenever **anothe
 | OS | Method | Tested |
 |---|---|---|
 | Linux | Sends `Notify` directly to D-Bus `org.freedesktop.Notifications` (aimed at deepin / CachyOS / KDE Plasma; any daemon implementing this spec should work). The session bus address must be of the form `unix:path=...` (the default on systemd-based distros) | Yes (CachyOS) |
-| Windows | The JDK's `SystemTray` / `TrayIcon.displayMessage` (shown as a toast on Windows 10/11). A tray icon appears only while notifying and is removed 30 seconds after the last notification | Yes |
+| Windows | The JDK's `SystemTray` / `TrayIcon.displayMessage` (shown as a toast on Windows 10/11). A tray icon appears only while notifying and is removed 30 seconds after the last notification | Not yet tested on real hardware |
 | macOS | Runs the OS-provided `osascript` (`display notification`) | **Untested** |
 
 - `icon` and `timeoutMillis` only apply on **Linux**. On Windows and macOS, the look and duration of notifications follow the OS settings
@@ -44,7 +46,7 @@ For playing — no building needed.
 
 The ZIP you get from GitHub's **Code → Download ZIP** contains the source code, **not** a ready-to-use jar.
 
-1. Build the jar by following "Building" below (`build/libs/player-join-notifier-1.0.0.jar`)
+1. Build the jar by following "Building" below (`build/libs/player-join-notifier-1.1.0.jar`)
 2. Then follow steps 2–4 of Option A with that jar
 
 ## Configuration
@@ -66,6 +68,7 @@ The ZIP you get from GitHub's **Code → Download ZIP** contains the source code
   "title": "",
   "body": "",
   "onlyWhenUnfocused": false,
+  "language": "auto",
   "icon": "applications-games",
   "timeoutMillis": 5000,
   "initialSyncGraceTicks": 40,
@@ -78,6 +81,7 @@ The ZIP you get from GitHub's **Code → Download ZIP** contains the source code
 | `enabled` | Set to `false` to stop notifications for every server |
 | `servers` | **List of servers to notify for (whitelist).** If empty, nothing is notified (the default) |
 | `title` / `body` | Notification text. `{player}` in `body` is replaced by the player name. **Leave empty to use the default text in the game's language** (e.g. "Minecraft - A player joined" / "{player} joined the server.") |
+| `language` | Language of the mod's own text: `"auto"` (default, follows the game language), `"en"` or `"ja"` |
 | `onlyWhenUnfocused` | `false` (default): notify even while the Minecraft window is focused. `true`: notify only while the window is **not** focused (e.g. you are in another app or alt-tabbed). `/joinnotify test` ignores this setting |
 | `icon` | Notification icon name (a freedesktop icon name). **Linux only** |
 | `timeoutMillis` | Display time in ms. `-1` = desktop default, `0` = never closes automatically. **Linux only** (Windows / macOS follow the OS settings) |
@@ -106,10 +110,26 @@ Register addresses **exactly as you type them on the multiplayer screen** (they 
 | `/joinnotify remove <address>` | Remove a registered address |
 | `/joinnotify list` | List registered servers (also shows the normalized form) |
 | `/joinnotify status` | Show the current server and whether notifications are active |
+| `/joinnotify language` | Show the current language setting |
+| `/joinnotify language <auto\|en\|ja>` | Change the language (`auto` follows the game language) |
+| `/joinnotify settings` | Show the current settings |
+| `/joinnotify settings enabled <true\|false>` | Turn the mod's notifications on or off |
+| `/joinnotify settings onlyWhenUnfocused <true\|false>` | Notify only while the Minecraft window is not focused |
 | `/joinnotify reload` | Reload the config file |
 | `/joinnotify test` | Send a test notification (to check that notifications appear) |
 
-Additions and removals are saved to the config file immediately.
+Everything you change with these commands is **saved to the config file immediately and permanently** (it survives restarts).
+
+### Mod Menu (optional)
+
+If [Mod Menu](https://modrinth.com/mod/modmenu) is installed, open it, select Player Join Notifier and click the config button. You can change:
+
+- Notifications on/off (`enabled`)
+- Only when the game is unfocused (`onlyWhenUnfocused`)
+- Language (Auto / English / 日本語)
+- The registered server list (add and remove)
+
+Every click is applied and saved immediately — there is no separate "save" step. Mod Menu is not required; without it, use the commands or edit the JSON file.
 
 ## How it works (avoiding false positives)
 
@@ -130,10 +150,11 @@ Requirements: **JDK 25**, **Gradle 9.6** (only used to generate the wrapper the 
 # First time only: generate the Gradle wrapper (uses the system gradle)
 gradle wrapper --gradle-version 9.6.0
 
-./gradlew build          # → build/libs/player-join-notifier-1.0.0.jar
+./gradlew build          # → build/libs/player-join-notifier-1.1.0.jar
 ./gradlew runClient      # launch a development client to try it out
 ```
 
+> Mod Menu support is compile-time only: Gradle fetches `com.terraformersmc:modmenu` from `maven.terraformersmc.com` to compile the optional settings screen. The mod runs fine without Mod Menu installed, and the dependency is not bundled into the jar.
 > This project does not ship `gradle-wrapper.jar` (a binary). Generate it with `gradle wrapper` as above, or copy the `gradlew` files from Fabric's official example mod.
 > Minecraft 26.1 and later is unobfuscated, so Loom is `net.fabricmc.fabric-loom`, dependencies use `implementation`, and no mappings are specified. Versions are managed in `gradle.properties` (recommended values: https://fabricmc.net/develop/).
 
@@ -142,7 +163,7 @@ gradle wrapper --gradle-version 9.6.0
 Self-tests that run without Minecraft or Gradle are included (JDK only).
 
 ```bash
-bash tests/run-core-tests.sh            # address normalization, join detection, notification text, bus address parsing, OS detection, macOS command generation
+bash tests/run-core-tests.sh            # address normalization, join detection, notification text, bus address parsing, OS detection, macOS command generation, translations (language switching, key consistency)
 bash tests/run-dbus-integration-test.sh # (Linux only) sends a real Notify to a mock notification service on a real dbus-daemon
 ```
 

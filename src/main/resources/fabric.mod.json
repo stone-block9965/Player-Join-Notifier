@@ -8,12 +8,16 @@
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
-    "client": ["dev.playerjoinnotifier.PlayerJoinNotifierMod"]
+    "client": ["dev.playerjoinnotifier.PlayerJoinNotifierMod"],
+    "modmenu": ["dev.playerjoinnotifier.ModMenuIntegration"]
   },
   "depends": {
     "fabricloader": ">=0.19.5",
     "minecraft": "~26.3",
     "java": ">=25",
     "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
   }
 }

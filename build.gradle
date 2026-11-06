@@ -11,7 +11,14 @@ base {
 }
 
 repositories {
-	// 追加のリポジトリは不要（外部ライブラリは使わない）
+	// Mod Menu（任意の連携。コンパイル時のみ使い、実行時に無くても動く）
+	maven {
+		name = 'TerraformersMC'
+		url = 'https://maven.terraformersmc.com/'
+		content {
+			includeGroup 'com.terraformersmc'
+		}
+	}
 }
 
 dependencies {
@@ -20,6 +27,10 @@ dependencies {
 	// 26.1 以降は modImplementation ではなく implementation を使う
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Mod Menu 連携（任意）。jar には含めない。runClient で設定画面を試すときだけ localRuntime で読み込む
+	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+	localRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
 }
 
 processResources {

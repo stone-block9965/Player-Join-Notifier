@@ -1,6 +1,7 @@
 package dev.playerjoinnotifier;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.playerjoinnotifier.core.NotificationText;
 import dev.playerjoinnotifier.core.ServerAddress;
@@ -27,6 +28,20 @@ final class JoinNotifyCommand {
 				.then(ClientCommands.literal("remove")
 						.then(ClientCommands.argument("address", StringArgumentType.greedyString())
 								.executes(c -> remove(c.getSource(), mod, StringArgumentType.getString(c, "address")))))
+				.then(ClientCommands.literal("language")
+						.executes(c -> showLanguage(c.getSource(), mod))
+						.then(ClientCommands.literal("auto").executes(c -> setLanguage(c.getSource(), mod, "auto")))
+						.then(ClientCommands.literal("en").executes(c -> setLanguage(c.getSource(), mod, "en")))
+						.then(ClientCommands.literal("ja").executes(c -> setLanguage(c.getSource(), mod, "ja"))))
+				.then(ClientCommands.literal("settings")
+						.executes(c -> showSettings(c.getSource(), mod))
+						.then(ClientCommands.literal("enabled")
+								.then(ClientCommands.argument("value", BoolArgumentType.bool())
+										.executes(c -> setEnabled(c.getSource(), mod, BoolArgumentType.getBool(c, "value")))))
+						.then(ClientCommands.literal("onlyWhenUnfocused")
+								.then(ClientCommands.argument("value", BoolArgumentType.bool())
+										.executes(c -> setOnlyWhenUnfocused(c.getSource(), mod,
+												BoolArgumentType.getBool(c, "value"))))))
 				.then(ClientCommands.literal("reload").executes(c -> reload(c.getSource(), mod)))
 				.then(ClientCommands.literal("test").executes(c -> test(c.getSource(), mod))));
 	}
@@ -37,6 +52,49 @@ final class JoinNotifyCommand {
 
 	private static Component state(boolean on) {
 		return Texts.tr(on ? "command.state.on" : "command.state.off");
+	}
+
+	/** Human-readable language setting, e.g. "English" / "auto (currently English)". */
+	static String languageLabel(String setting) {
+		String shown = "ja".equals(Texts.activeLanguage()) ? "日本語" : "English";
+		return switch (setting) {
+			case "en" -> "English";
+			case "ja" -> "日本語";
+			default -> Texts.str("command.language.auto_value", shown);
+		};
+	}
+
+	private static int showLanguage(FabricClientCommandSource source, PlayerJoinNotifierMod mod) {
+		say(source, "command.language.current", languageLabel(mod.config().get().language));
+		return 1;
+	}
+
+	private static int setLanguage(FabricClientCommandSource source, PlayerJoinNotifierMod mod, String setting) {
+		mod.config().update(c -> c.language = setting);
+		say(source, "command.language.set", languageLabel(setting));
+		return 1;
+	}
+
+	private static int showSettings(FabricClientCommandSource source, PlayerJoinNotifierMod mod) {
+		NotifierConfig cfg = mod.config().get();
+		say(source, "command.settings.header");
+		say(source, "command.settings.line", "enabled", state(cfg.enabled));
+		say(source, "command.settings.line", "onlyWhenUnfocused", state(cfg.onlyWhenUnfocused));
+		say(source, "command.settings.line", "language", languageLabel(cfg.language));
+		return 1;
+	}
+
+	private static int setEnabled(FabricClientCommandSource source, PlayerJoinNotifierMod mod, boolean value) {
+		mod.config().update(c -> c.enabled = value);
+		mod.requestRestart();
+		say(source, "command.settings.changed", "enabled", state(value));
+		return 1;
+	}
+
+	private static int setOnlyWhenUnfocused(FabricClientCommandSource source, PlayerJoinNotifierMod mod, boolean value) {
+		mod.config().update(c -> c.onlyWhenUnfocused = value);
+		say(source, "command.settings.changed", "onlyWhenUnfocused", state(value));
+		return 1;
 	}
 
 	private static int list(FabricClientCommandSource source, PlayerJoinNotifierMod mod) {

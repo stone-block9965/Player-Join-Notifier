@@ -1,6 +1,7 @@
 import dev.playerjoinnotifier.core.JoinDetector;
 import dev.playerjoinnotifier.core.NotificationText;
 import dev.playerjoinnotifier.core.ServerAddress;
+import dev.playerjoinnotifier.core.Translator;
 import dev.playerjoinnotifier.dbus.DBusNotificationClient;
 import dev.playerjoinnotifier.platform.MacNotificationBackend;
 import dev.playerjoinnotifier.platform.OperatingSystem;
@@ -36,6 +37,7 @@ public class CoreSelfTest {
 		busAddressTests();
 		textTests();
 		platformTests();
+		translatorTests();
 		System.out.println(checks + " checks, " + failures + " failures");
 		System.exit(failures == 0 ? 0 : 1);
 	}
@@ -242,5 +244,69 @@ public class CoreSelfTest {
 		eq("win truncate keeps surrogate pairs",
 				true, !Character.isHighSurrogate(WindowsNotificationBackend.truncate(emoji, 63).charAt(
 						WindowsNotificationBackend.truncate(emoji, 63).length() - 2)));
+	}
+
+	// ------------------------------------------------------------ 翻訳（言語切替）
+
+	static void translatorTests() {
+		eq("resolve auto jpn_JP", "ja", Translator.resolve("auto", "jpn_JP"));
+		eq("resolve auto ja_jp", "ja", Translator.resolve("auto", "ja_jp"));
+		eq("resolve auto en_us", "en", Translator.resolve("auto", "en_us"));
+		eq("resolve auto eng_GB", "en", Translator.resolve("auto", "eng_GB"));
+		eq("resolve auto other language falls back to en", "en", Translator.resolve("auto", "fra_FR"));
+		eq("resolve auto null", "en", Translator.resolve("auto", null));
+		eq("resolve explicit ja beats game language", "ja", Translator.resolve("ja", "en_us"));
+		eq("resolve explicit en beats game language", "en", Translator.resolve("en", "jpn_JP"));
+		eq("resolve unknown setting behaves like auto", "ja", Translator.resolve("xx", "jpn_JP"));
+
+		eq("setting auto", "auto", Translator.normalizeSetting("auto"));
+		eq("setting upper/space", "ja", Translator.normalizeSetting("  JA "));
+		eq("setting invalid", null, Translator.normalizeSetting("fr"));
+		eq("setting null", null, Translator.normalizeSetting(null));
+
+		Map<String, String> parsed = Translator.parseFlatJson(
+				"{ \"a\": \"x\\ny\", \"b\": \"\\u65e5\\u672c \\\"q\\\"\", \"c\": \"\" }");
+		eq("json escapes", "x\ny", parsed.get("a"));
+		eq("json unicode+quote", "日本 \"q\"", parsed.get("b"));
+		eq("json empty value", "", parsed.get("c"));
+		eq("json empty object", 0, Translator.parseFlatJson("{}").size());
+
+		Translator t = new Translator();
+		String p = "player_join_notifier.";
+		eq("en body", "{player} joined the server.", t.get("en", p + "notification.body"));
+		eq("ja body", "{player} がサーバーに参加しました。", t.get("ja", p + "notification.body"));
+		eq("format args", "Added: example.com", t.get("en", p + "command.add.added", "example.com"));
+		eq("unknown key returns key", "no.such.key", t.get("ja", "no.such.key"));
+		eq("unknown language falls back to en", "{player} joined the server.", t.get("fr", p + "notification.body"));
+
+		// ja と en のキーが一致し、%s の個数も一致する
+		Map<String, String> en = t.table("en");
+		Map<String, String> ja = t.table("ja");
+		eq("lang files loaded", true, en.size() > 20 && ja.size() > 20);
+		eq("same key set", en.keySet(), ja.keySet());
+		for (String key : en.keySet()) {
+			eq("placeholder count " + key, countOf(en.get(key), "%s"), countOf(ja.get(key), "%s"));
+		}
+
+		// ソース中で使っているキーが全て翻訳ファイルにある（タイプミス検出）
+		try (var files = java.nio.file.Files.walk(Path.of("src/main/java"))) {
+			java.util.regex.Pattern pat = java.util.regex.Pattern.compile("\"((?:command|gui|notification)\\.[a-z_.]+)\"");
+			for (Path f : (Iterable<Path>) files.filter(x -> x.toString().endsWith(".java"))::iterator) {
+				var m = pat.matcher(java.nio.file.Files.readString(f));
+				while (m.find()) {
+					eq("key exists: " + m.group(1) + " (" + f.getFileName() + ")", true, en.containsKey(p + m.group(1)));
+				}
+			}
+		} catch (java.io.IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	static int countOf(String s, String sub) {
+		int n = 0;
+		for (int i = s.indexOf(sub); i >= 0; i = s.indexOf(sub, i + sub.length())) {
+			n++;
+		}
+		return n;
 	}
 }

@@ -83,6 +83,16 @@ public final class ConfigManager {
 		this.normalizedServers = ServerAddress.normalizeAll(loaded.servers);
 	}
 
+	/**
+	 * Changes settings and saves them to the config file right away (the change is permanent, not temporary).
+	 * The values are sanitized the same way as when loaded.
+	 */
+	public synchronized void update(java.util.function.Consumer<NotifierConfig> change) {
+		change.accept(config);
+		apply(config);
+		save();
+	}
+
 	public synchronized AddResult addServer(String raw) {
 		var key = ServerAddress.normalize(raw);
 		if (key.isEmpty()) {
