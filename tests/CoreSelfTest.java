@@ -1,5 +1,7 @@
+import dev.playerjoinnotifier.core.ChimeSynth;
 import dev.playerjoinnotifier.core.JoinDetector;
 import dev.playerjoinnotifier.core.NotificationText;
+import dev.playerjoinnotifier.core.PlayerFilter;
 import dev.playerjoinnotifier.core.ServerAddress;
 import dev.playerjoinnotifier.core.Translator;
 import dev.playerjoinnotifier.dbus.DBusNotificationClient;
@@ -38,6 +40,9 @@ public class CoreSelfTest {
 		textTests();
 		platformTests();
 		translatorTests();
+		leaveTests();
+		filterTests();
+		chimeTests();
 		System.out.println(checks + " checks, " + failures + " failures");
 		System.exit(failures == 0 ? 0 : 1);
 	}
@@ -308,5 +313,140 @@ public class CoreSelfTest {
 			n++;
 		}
 		return n;
+	}
+
+	// ------------------------------------------------------------ 退出検知
+
+	@SuppressWarnings("unchecked")
+	static void leaveTests() {
+		int debounce = JoinDetector.LEAVE_DEBOUNCE_TICKS;
+		JoinDetector d = new JoinDetector(2, 0);
+		var all = list(p(ME, "me"), p(ALICE, "Alice"), p(BOB, "Bob"));
+		for (int i = 0; i < 6; i++) {
+			d.update(all, ME);
+		}
+		eq("baseline: nobody left", List.of(), d.left());
+
+		// Bob が抜ける: debounce 経過後に 1 回だけ確定する
+		var noBob = list(p(ME, "me"), p(ALICE, "Alice"));
+		java.util.List<String> reported = new java.util.ArrayList<>();
+		for (int i = 0; i < debounce + 5; i++) {
+			d.update(noBob, ME);
+			d.left().forEach(l -> reported.add(l.name()));
+		}
+		eq("bob's leave is reported exactly once", List.of("Bob"), reported);
+
+		// 退出直後の再参加（debounce 超過後）は通常の参加として通知される
+		eq("bob rejoins after the debounce -> join", List.of("Bob"), names(d.update(all, ME)));
+		eq("rejoin is not a leave", List.of(), d.left());
+
+		// タブリストの一瞬の作り直し（debounce 内に戻る）は、参加も退出も起こさない
+		d.update(noBob, ME);
+		eq("flicker: no leave yet", List.of(), d.left());
+		eq("flicker: no join when it comes back", List.of(), names(d.update(all, ME)));
+		for (int i = 0; i < debounce * 2; i++) {
+			d.update(all, ME);
+			eq("flicker: never reported as leave", List.of(), d.left());
+		}
+
+		// 自分自身の退出は報告しない
+		JoinDetector d2 = new JoinDetector(2, 0);
+		for (int i = 0; i < 6; i++) {
+			d2.update(all, ME);
+		}
+		java.util.List<String> reported2 = new java.util.ArrayList<>();
+		for (int i = 0; i < debounce + 5; i++) {
+			d2.update(list(p(ALICE, "Alice"), p(BOB, "Bob")), ME);
+			d2.left().forEach(l -> reported2.add(l.name()));
+		}
+		eq("own leave is not reported", List.of(), reported2);
+
+		// 同時に 2 人抜ける
+		JoinDetector d3 = new JoinDetector(2, 0);
+		for (int i = 0; i < 6; i++) {
+			d3.update(all, ME);
+		}
+		java.util.List<String> reported3 = new java.util.ArrayList<>();
+		for (int i = 0; i < debounce + 2; i++) {
+			d3.update(list(p(ME, "me")), ME);
+			d3.left().forEach(l -> reported3.add(l.name()));
+		}
+		eq("two leave together", List.of("Alice", "Bob"), reported3.stream().sorted().toList());
+
+		// 初期同期中・reset 後は退出を報告しない
+		JoinDetector d4 = new JoinDetector(40, 0);
+		d4.update(all, ME);
+		for (int i = 0; i < 15; i++) {
+			d4.update(list(p(ME, "me")), ME);
+			eq("no leave during initial sync", List.of(), d4.left());
+		}
+	}
+
+	// ------------------------------------------------------------ ウォッチリスト / ブロックリスト
+
+	static void filterTests() {
+		java.util.UUID id = java.util.UUID.fromString("069a79f4-44e9-4726-a5be-fca90e38aaf5");
+		eq("name key lower-cased", "steve", PlayerFilter.key(" Steve ").orElse(null));
+		eq("uuid key", "069a79f4-44e9-4726-a5be-fca90e38aaf5",
+				PlayerFilter.key("069A79F4-44E9-4726-A5BE-FCA90E38AAF5").orElse(null));
+		eq("floodgate-style name (leading dot) ok", ".steve", PlayerFilter.key(".Steve").orElse(null));
+		eq("empty invalid", null, PlayerFilter.key("  ").orElse(null));
+		eq("space inside invalid", null, PlayerFilter.key("a b").orElse(null));
+		eq("too long invalid", null, PlayerFilter.key("x".repeat(33)).orElse(null));
+		eq("null invalid", null, PlayerFilter.key(null).orElse(null));
+
+		eq("name match is case-insensitive", true, PlayerFilter.matches("steve", "STEVE", id));
+		eq("name mismatch", false, PlayerFilter.matches("steve", "Alex", id));
+		eq("uuid entry matches by uuid", true, PlayerFilter.matches("069a79f4-44e9-4726-a5be-fca90e38aaf5", "Whatever", id));
+		eq("uuid entry does not match other uuid", false,
+				PlayerFilter.matches("069a79f4-44e9-4726-a5be-fca90e38aaf5", "Steve", ALICE));
+		eq("invalid entry never matches", false, PlayerFilter.matches("a b", "a b", id));
+
+		List<String> none = List.of();
+		eq("both empty -> everyone", true, PlayerFilter.allows(none, none, "Steve", id));
+		eq("watchlist only allows listed", true, PlayerFilter.allows(List.of("Steve"), none, "steve", id));
+		eq("watchlist blocks unlisted", false, PlayerFilter.allows(List.of("Alex"), none, "Steve", id));
+		eq("blocklist blocks listed", false, PlayerFilter.allows(none, List.of("Steve"), "Steve", id));
+		eq("blocklist allows others", true, PlayerFilter.allows(none, List.of("Alex"), "Steve", id));
+		eq("blocklist wins over watchlist", false, PlayerFilter.allows(List.of("Steve"), List.of("Steve"), "Steve", id));
+		eq("watchlist with only invalid entries counts as empty", true, PlayerFilter.allows(List.of("a b"), none, "Steve", id));
+		eq("null lists are empty", true, PlayerFilter.allows(null, null, "Steve", id));
+		eq("watchlist switched off -> everyone", true,
+				PlayerFilter.allows(false, List.of("Alex"), true, none, "Steve", id));
+		eq("watchlist switched on -> filters", false,
+				PlayerFilter.allows(true, List.of("Alex"), true, none, "Steve", id));
+		eq("blocklist switched off -> not blocked", true,
+				PlayerFilter.allows(true, none, false, List.of("Steve"), "Steve", id));
+		eq("blocklist switched on -> blocked", false,
+				PlayerFilter.allows(true, none, true, List.of("Steve"), "Steve", id));
+		eq("both off -> everyone", true,
+				PlayerFilter.allows(false, List.of("Alex"), false, List.of("Steve"), "Steve", id));
+		eq("null name with watchlist -> not allowed", false, PlayerFilter.allows(List.of("Steve"), none, null, id));
+	}
+
+	// ------------------------------------------------------------ 通知音
+
+	static int peak(byte[] pcm) {
+		int max = 0;
+		for (int i = 0; i + 1 < pcm.length; i += 2) {
+			max = Math.max(max, Math.abs((short) ((pcm[i] & 0xFF) | (pcm[i + 1] << 8))));
+		}
+		return max;
+	}
+
+	static void chimeTests() {
+		byte[] up = ChimeSynth.render(true, 50);
+		byte[] down = ChimeSynth.render(false, 50);
+		eq("chime is short (0.1–0.5 s)", true,
+				up.length / 2.0 / ChimeSynth.SAMPLE_RATE > 0.1 && up.length / 2.0 / ChimeSynth.SAMPLE_RATE < 0.5);
+		eq("chime length is whole 16-bit samples", 0, up.length % 2);
+		eq("join and leave chimes differ", false, java.util.Arrays.equals(up, down));
+		eq("volume 0 is silent", 0, peak(ChimeSynth.render(true, 0)));
+		eq("negative volume is silent", 0, peak(ChimeSynth.render(true, -5)));
+		eq("volume 100 louder than 50", true, peak(ChimeSynth.render(true, 100)) > peak(up));
+		eq("volume above 100 is clamped", peak(ChimeSynth.render(true, 100)), peak(ChimeSynth.render(true, 999)));
+		eq("never clips", true, peak(ChimeSynth.render(true, 100)) < Short.MAX_VALUE);
+		eq("audible at 40", true, peak(ChimeSynth.render(true, 40)) > 1000);
+		eq("starts without a click", true, Math.abs((short) ((up[0] & 0xFF) | (up[1] << 8))) < 50);
 	}
 }

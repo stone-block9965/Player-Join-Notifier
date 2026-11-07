@@ -48,6 +48,16 @@ final class Texts {
 		return cfg.title.isBlank() ? str("notification.title") : cfg.title;
 	}
 
+	/** Title of the "player left" notification. */
+	static String leaveTitle(NotifierConfig cfg) {
+		return cfg.leaveTitle.isBlank() ? str("notification.leave_title") : cfg.leaveTitle;
+	}
+
+	/** Body template of the "player left" notification. */
+	static String leaveBodyTemplate(NotifierConfig cfg) {
+		return cfg.leaveBody.isBlank() ? str("notification.leave_body") : cfg.leaveBody;
+	}
+
 	/** Notification body template ({player} is replaced later): the config value, or the localized default. */
 	static String bodyTemplate(NotifierConfig cfg) {
 		return cfg.body.isBlank() ? str("notification.body") : cfg.body;

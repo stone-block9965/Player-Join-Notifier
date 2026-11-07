@@ -7,6 +7,7 @@ A client-only Fabric mod that shows an OS desktop notification whenever **anothe
 - No server-side installation needed — it works from the client alone
 - No extra libraries. Linux talks to D-Bus directly from Java, Windows uses the JDK's built-in tray notifications, and macOS uses the OS-provided `osascript` (no `notify-send` or other extra commands required)
 - It never communicates with servers or any external service
+- Optional **watchlist** (only your friends) and **blocklist**, optional **leave notifications**, and a short **notification sound**
 - English and Japanese included. The language follows the game language automatically, and you can change it with `/joinnotify language` or in Mod Menu
 - Settings can be changed in game (`/joinnotify settings ...`) or in [Mod Menu](https://modrinth.com/mod/modmenu) (optional), and are always saved permanently
 
@@ -46,7 +47,7 @@ For playing — no building needed.
 
 The ZIP you get from GitHub's **Code → Download ZIP** contains the source code, **not** a ready-to-use jar.
 
-1. Build the jar by following "Building" below (`build/libs/player-join-notifier-1.1.0.jar`)
+1. Build the jar by following "Building" below (`build/libs/player-join-notifier-1.2.0.jar`)
 2. Then follow steps 2–4 of Option A with that jar
 
 ## Configuration
@@ -67,7 +68,16 @@ The ZIP you get from GitHub's **Code → Download ZIP** contains the source code
   ],
   "title": "",
   "body": "",
+  "leaveTitle": "",
+  "leaveBody": "",
   "onlyWhenUnfocused": false,
+  "notifyOnLeave": false,
+  "sound": true,
+  "soundVolume": 40,
+  "watchlistEnabled": true,
+  "watchlist": [],
+  "blocklistEnabled": true,
+  "blocklist": [],
   "language": "auto",
   "icon": "applications-games",
   "timeoutMillis": 5000,
@@ -81,6 +91,14 @@ The ZIP you get from GitHub's **Code → Download ZIP** contains the source code
 | `enabled` | Set to `false` to stop notifications for every server |
 | `servers` | **List of servers to notify for (whitelist).** If empty, nothing is notified (the default) |
 | `title` / `body` | Notification text. `{player}` in `body` is replaced by the player name. **Leave empty to use the default text in the game's language** (e.g. "Minecraft - A player joined" / "{player} joined the server.") |
+| `leaveTitle` / `leaveBody` | Text of the "player left" notification (only used when `notifyOnLeave` is `true`). Empty = default text in the game's language |
+| `notifyOnLeave` | `true` = also notify when a player leaves. Default `false`. A player who disappears from the player list for less than a second (the server rebuilding the list) is not counted as leaving |
+| `sound` | `true` (default) = play a short chime with each notification (rising for a join, falling for a leave) |
+| `soundVolume` | Chime volume, `0`–`100` (default `40`) |
+| `watchlistEnabled` | `true` (default) = the watchlist is applied. `false` = the watchlist is ignored and everyone is notified; its entries are kept |
+| `watchlist` | Player names (case-insensitive) or UUIDs. **If it has at least one entry, only these players are notified.** Empty = everyone |
+| `blocklistEnabled` | `true` (default) = the blocklist is applied. `false` = the blocklist is ignored; its entries are kept |
+| `blocklist` | Player names or UUIDs that are **never** notified. The blocklist wins over the watchlist |
 | `language` | Language of the mod's own text: `"auto"` (default, follows the game language), `"en"` or `"ja"` |
 | `onlyWhenUnfocused` | `false` (default): notify even while the Minecraft window is focused. `true`: notify only while the window is **not** focused (e.g. you are in another app or alt-tabbed). `/joinnotify test` ignores this setting |
 | `icon` | Notification icon name (a freedesktop icon name). **Linux only** |
@@ -112,11 +130,23 @@ Register addresses **exactly as you type them on the multiplayer screen** (they 
 | `/joinnotify status` | Show the current server and whether notifications are active |
 | `/joinnotify language` | Show the current language setting |
 | `/joinnotify language <auto\|en\|ja>` | Change the language (`auto` follows the game language) |
-| `/joinnotify settings` | Show the current settings |
-| `/joinnotify settings enabled <true\|false>` | Turn the mod's notifications on or off |
-| `/joinnotify settings onlyWhenUnfocused <true\|false>` | Notify only while the Minecraft window is not focused |
+| `/joinnotify settings` | Show all current settings |
+| `/joinnotify onlyWhenUnfocused` | Show whether the focus filter is `true` or `false` |
+| `/joinnotify onlyWhenUnfocused <true\|false>` | Notify only while the Minecraft window is not focused |
+| `/joinnotify notifyOnLeave [true\|false]` | Show / change leave notifications |
+| `/joinnotify sound [true\|false]` | Show / change the notification sound |
+| `/joinnotify soundVolume [0-100]` | Show / change the sound volume |
+| `/joinnotify enabled [true\|false]` | Show / turn the mod's notifications on or off |
+| `/joinnotify watchlist` | Show the watchlist (and whether it is on) |
+| `/joinnotify watchlist enabled [true\|false]` | Show / switch the watchlist on or off (entries are kept) |
+| `/joinnotify watchlist add <player>` / `remove <player>` | Add / remove a player (name or UUID) |
+| `/joinnotify blocklist` | Show the blocklist (and whether it is on) |
+| `/joinnotify blocklist enabled [true\|false]` | Show / switch the blocklist on or off (entries are kept) |
+| `/joinnotify blocklist add <player>` / `remove <player>` | Add / remove a player (name or UUID) |
 | `/joinnotify reload` | Reload the config file |
 | `/joinnotify test` | Send a test notification (to check that notifications appear) |
+
+Every setting above can also be written as `/joinnotify settings <name> [value]`.
 
 Everything you change with these commands is **saved to the config file immediately and permanently** (it survives restarts).
 
@@ -127,9 +157,20 @@ If [Mod Menu](https://modrinth.com/mod/modmenu) is installed, open it, select Pl
 - Notifications on/off (`enabled`)
 - Only when the game is unfocused (`onlyWhenUnfocused`)
 - Language (Auto / English / 日本語)
-- The registered server list (add and remove)
+- Leave notifications (`notifyOnLeave`) and the sound (`sound`)
+- The watchlist and blocklist ON/OFF switches (`watchlistEnabled`, `blocklistEnabled`)
+- The registered server list, the watchlist and the blocklist (add and remove)
 
 Every click is applied and saved immediately — there is no separate "save" step. Mod Menu is not required; without it, use the commands or edit the JSON file.
+
+### Watchlist, blocklist and sound — how they work
+
+- **Watchlist** (for "only my friends"): while it has at least one entry, only those players are notified. With an empty watchlist everyone is notified. `/joinnotify watchlist add Steve`
+- **Blocklist**: these players are never notified. If a player is on both lists, the blocklist wins
+- An entry is a player name (not case-sensitive) or a UUID. Names are matched against the name shown in the player list
+- Both lists apply to join and leave notifications and are saved permanently
+- Each list has an ON/OFF switch (`watchlistEnabled` / `blocklistEnabled`). Switching a list off ignores it but **keeps its entries**, so you can turn it back on later
+- **Sound**: a short two-note chime generated in code and played with Java Sound (no sound files, no extra libraries), so it works the same on Linux, Windows and macOS. It plays together with each notification, so it is also skipped by `onlyWhenUnfocused` and by the lists. Your OS may play its own notification sound as well; turn the chime off with `/joinnotify sound false` if you prefer only that
 
 ## How it works (avoiding false positives)
 
@@ -150,7 +191,7 @@ Requirements: **JDK 25**, **Gradle 9.6** (only used to generate the wrapper the 
 # First time only: generate the Gradle wrapper (uses the system gradle)
 gradle wrapper --gradle-version 9.6.0
 
-./gradlew build          # → build/libs/player-join-notifier-1.1.0.jar
+./gradlew build          # → build/libs/player-join-notifier-1.2.0.jar
 ./gradlew runClient      # launch a development client to try it out
 ```
 
@@ -163,7 +204,7 @@ gradle wrapper --gradle-version 9.6.0
 Self-tests that run without Minecraft or Gradle are included (JDK only).
 
 ```bash
-bash tests/run-core-tests.sh            # address normalization, join detection, notification text, bus address parsing, OS detection, macOS command generation, translations (language switching, key consistency)
+bash tests/run-core-tests.sh            # address normalization, join detection, notification text, bus address parsing, OS detection, macOS command generation, translations (language switching, key consistency), leave detection, watchlist/blocklist matching, notification chime generation
 bash tests/run-dbus-integration-test.sh # (Linux only) sends a real Notify to a mock notification service on a real dbus-daemon
 ```
 

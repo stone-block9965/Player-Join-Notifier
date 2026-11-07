@@ -3,6 +3,7 @@ package dev.playerjoinnotifier;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
+import dev.playerjoinnotifier.core.PlayerFilter;
 import dev.playerjoinnotifier.core.ServerAddress;
 import org.slf4j.Logger;
 
@@ -21,6 +22,9 @@ import java.util.Set;
 /** 設定ファイルの読み書きと、サーバーホワイトリストの管理。 */
 public final class ConfigManager {
 	public enum AddResult { ADDED, DUPLICATE, INVALID }
+
+	/** Which player list to edit. */
+	public enum PlayerList { WATCH, BLOCK }
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -107,6 +111,60 @@ public final class ConfigManager {
 		apply(config);
 		save();
 		return AddResult.ADDED;
+	}
+
+	private List<String> playerList(PlayerList which) {
+		return which == PlayerList.WATCH ? config.watchlist : config.blocklist;
+	}
+
+	private void setPlayerList(PlayerList which, List<String> list) {
+		if (which == PlayerList.WATCH) {
+			config.watchlist = list;
+		} else {
+			config.blocklist = list;
+		}
+	}
+
+	/** Adds a player name or UUID to the watchlist / blocklist and saves immediately. */
+	public synchronized AddResult addPlayer(PlayerList which, String raw) {
+		var key = PlayerFilter.key(raw);
+		if (key.isEmpty()) {
+			return AddResult.INVALID;
+		}
+		for (String s : playerList(which)) {
+			if (PlayerFilter.key(s).map(key.get()::equals).orElse(false)) {
+				return AddResult.DUPLICATE;
+			}
+		}
+		List<String> list = new ArrayList<>(playerList(which));
+		list.add(raw.strip());
+		setPlayerList(which, list);
+		apply(config);
+		save();
+		return AddResult.ADDED;
+	}
+
+	/** @return number of entries removed */
+	public synchronized int removePlayer(PlayerList which, String raw) {
+		var key = PlayerFilter.key(raw);
+		String stripped = raw == null ? "" : raw.strip();
+		List<String> kept = new ArrayList<>();
+		int removed = 0;
+		for (String s : playerList(which)) {
+			boolean same = s.strip().equals(stripped)
+					|| (key.isPresent() && PlayerFilter.key(s).map(key.get()::equals).orElse(false));
+			if (same) {
+				removed++;
+			} else {
+				kept.add(s);
+			}
+		}
+		if (removed > 0) {
+			setPlayerList(which, kept);
+			apply(config);
+			save();
+		}
+		return removed;
 	}
 
 	/** @return 削除した件数 */

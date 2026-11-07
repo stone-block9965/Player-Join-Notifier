@@ -16,11 +16,38 @@ public final class NotifierConfig {
 	/** Language of the mod's own text: "auto" (follow the game language), "en" or "ja". */
 	public String language = "auto";
 
+	/** If true, also notify when a player leaves. Default off. */
+	public boolean notifyOnLeave = false;
+
+	/** Play a short chime with each notification. */
+	public boolean sound = true;
+
+	/** Chime volume, 0-100. */
+	public int soundVolume = 40;
+
+	/** Master switch for the watchlist. false = the watchlist is ignored (its entries are kept). */
+	public boolean watchlistEnabled = true;
+
+	/** Master switch for the blocklist. false = the blocklist is ignored (its entries are kept). */
+	public boolean blocklistEnabled = true;
+
+	/** Only these players are notified (names, case-insensitive, or UUIDs). Empty = everyone. */
+	public List<String> watchlist = new ArrayList<>();
+
+	/** These players are never notified (names or UUIDs). Wins over the watchlist. */
+	public List<String> blocklist = new ArrayList<>();
+
 	/** If true, only notify while the Minecraft window is not focused. Default false = always notify. */
 	public boolean onlyWhenUnfocused = false;
 
 	/** Notification title. Empty = localized default that follows the game language. */
 	public String title = "";
+
+	/** Title of the "player left" notification. Empty = localized default. */
+	public String leaveTitle = "";
+
+	/** Body of the "player left" notification; {player} is replaced by the player name. Empty = localized default. */
+	public String leaveBody = "";
 
 	/** Notification body; {player} is replaced by the player name. Empty = localized default that follows the game language. */
 	public String body = "";
@@ -43,6 +70,21 @@ public final class NotifierConfig {
 			servers = new ArrayList<>();
 		}
 		servers.removeIf(s -> s == null);
+		if (watchlist == null) {
+			watchlist = new ArrayList<>();
+		}
+		watchlist.removeIf(s -> s == null || s.isBlank());
+		if (blocklist == null) {
+			blocklist = new ArrayList<>();
+		}
+		blocklist.removeIf(s -> s == null || s.isBlank());
+		soundVolume = Math.max(0, Math.min(soundVolume, 100));
+		if (leaveTitle == null) {
+			leaveTitle = "";
+		}
+		if (leaveBody == null) {
+			leaveBody = "";
+		}
 		NotifierConfig d = new NotifierConfig();
 		String lang = Translator.normalizeSetting(language);
 		language = lang == null ? d.language : lang;

@@ -2,6 +2,7 @@ package dev.playerjoinnotifier;
 
 import dev.playerjoinnotifier.platform.NotificationBackend;
 import dev.playerjoinnotifier.platform.NotificationBackends;
+import dev.playerjoinnotifier.platform.SoundPlayer;
 import org.slf4j.Logger;
 
 import java.util.concurrent.ArrayBlockingQueue;
@@ -49,6 +50,21 @@ public final class DesktopNotifier {
 		}
 	}
 
+	/** Plays the notification chime on the notifier thread (rising = join, falling = leave). */
+	public void playChime(boolean join, int volumePercent) {
+		try {
+			executor.execute(() -> {
+				try {
+					SoundPlayer.play(join, volumePercent);
+				} catch (Exception | LinkageError e) {
+					warnThrottled(e instanceof Exception ex ? ex : new RuntimeException(e));
+				}
+			});
+		} catch (RuntimeException e) {
+			warnThrottled(e);
+		}
+	}
+
 	private void deliver(String title, String body, String icon, int timeoutMillis) {
 		try {
 			backend.send(title, body, icon, timeoutMillis);
@@ -61,7 +77,7 @@ public final class DesktopNotifier {
 		long now = System.currentTimeMillis();
 		if (now - lastWarnMillis >= WARN_INTERVAL_MILLIS) {
 			lastWarnMillis = now;
-			log.warn("Could not send the desktop notification [{}] (similar warnings are suppressed for 1 minute): {}", backend.name(), e.toString());
+			log.warn("Could not send the notification or sound [{}] (similar warnings are suppressed for 1 minute): {}", backend.name(), e.toString());
 		} else {
 			log.debug("Desktop notification failed", e);
 		}

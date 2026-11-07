@@ -3,6 +3,7 @@ package dev.playerjoinnotifier;
 import com.mojang.authlib.GameProfile;
 import dev.playerjoinnotifier.core.JoinDetector;
 import dev.playerjoinnotifier.core.NotificationText;
+import dev.playerjoinnotifier.core.PlayerFilter;
 import dev.playerjoinnotifier.core.ServerAddress;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -89,14 +90,34 @@ public final class PlayerJoinNotifierMod implements ClientModInitializer {
 			}
 		}
 
-		for (JoinDetector.Joined joined : detector.update(current, mc.player.getUUID())) {
-			String name = (joined.name() == null || joined.name().isBlank()) ? joined.uuid().toString() : joined.name();
-			NotifierConfig cfg = configManager.get();
-			if (cfg.onlyWhenUnfocused && mc.isWindowActive()) {
-				continue; // the game window is focused: skip the desktop notification
+		// Always run the detector so joins/leaves are recorded even when no notification is shown
+		var joinedPlayers = detector.update(current, mc.player.getUUID());
+		var leftPlayers = detector.left();
+		NotifierConfig cfg = configManager.get();
+		if (cfg.onlyWhenUnfocused && mc.isWindowActive()) {
+			return; // the game window is focused: skip desktop notifications and sounds
+		}
+		for (JoinDetector.Joined joined : joinedPlayers) {
+			notifyPlayer(cfg, true, joined.uuid(), joined.name());
+		}
+		if (cfg.notifyOnLeave) {
+			for (JoinDetector.Left gone : leftPlayers) {
+				notifyPlayer(cfg, false, gone.uuid(), gone.name());
 			}
-			notifier.send(Texts.title(cfg), NotificationText.body(Texts.bodyTemplate(cfg), name), cfg.icon,
-					cfg.timeoutMillis);
+		}
+	}
+
+	/** Applies the watchlist / blocklist, then shows the notification (and the chime). */
+	private void notifyPlayer(NotifierConfig cfg, boolean join, UUID uuid, String name) {
+		if (!PlayerFilter.allows(cfg.watchlistEnabled, cfg.watchlist, cfg.blocklistEnabled, cfg.blocklist, name, uuid)) {
+			return;
+		}
+		String shown = (name == null || name.isBlank()) ? uuid.toString() : name;
+		String title = join ? Texts.title(cfg) : Texts.leaveTitle(cfg);
+		String template = join ? Texts.bodyTemplate(cfg) : Texts.leaveBodyTemplate(cfg);
+		notifier.send(title, NotificationText.body(template, shown), cfg.icon, cfg.timeoutMillis);
+		if (cfg.sound) {
+			notifier.playChime(join, cfg.soundVolume);
 		}
 	}
 

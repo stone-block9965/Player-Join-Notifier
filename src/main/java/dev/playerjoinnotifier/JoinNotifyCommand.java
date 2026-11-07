@@ -2,12 +2,20 @@ package dev.playerjoinnotifier;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import dev.playerjoinnotifier.ConfigManager.PlayerList;
 import dev.playerjoinnotifier.core.NotificationText;
+import dev.playerjoinnotifier.core.PlayerFilter;
 import dev.playerjoinnotifier.core.ServerAddress;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.network.chat.Component;
+
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * クライアントサイドコマンド {@code /joinnotify}（サーバーには送信されない）。
@@ -17,8 +25,21 @@ final class JoinNotifyCommand {
 	private JoinNotifyCommand() {
 	}
 
+	/** A true/false setting that can be shown and changed with /joinnotify <name> [true|false]. */
+	private record BoolSetting(String name, Function<NotifierConfig, Boolean> get,
+			BiConsumer<NotifierConfig, Boolean> set, boolean restartSession) {
+	}
+
+	private static final List<BoolSetting> BOOL_SETTINGS = List.of(
+			new BoolSetting("enabled", c -> c.enabled, (c, v) -> c.enabled = v, true),
+			new BoolSetting("onlyWhenUnfocused", c -> c.onlyWhenUnfocused, (c, v) -> c.onlyWhenUnfocused = v, false),
+			new BoolSetting("notifyOnLeave", c -> c.notifyOnLeave, (c, v) -> c.notifyOnLeave = v, false),
+			new BoolSetting("sound", c -> c.sound, (c, v) -> c.sound = v, false),
+			new BoolSetting("watchlistEnabled", c -> c.watchlistEnabled, (c, v) -> c.watchlistEnabled = v, false),
+			new BoolSetting("blocklistEnabled", c -> c.blocklistEnabled, (c, v) -> c.blocklistEnabled = v, false));
+
 	static void register(CommandDispatcher<FabricClientCommandSource> dispatcher, PlayerJoinNotifierMod mod) {
-		dispatcher.register(ClientCommands.literal("joinnotify")
+		LiteralArgumentBuilder<FabricClientCommandSource> root = ClientCommands.literal("joinnotify")
 				.then(ClientCommands.literal("list").executes(c -> list(c.getSource(), mod)))
 				.then(ClientCommands.literal("status").executes(c -> status(c.getSource(), mod)))
 				.then(ClientCommands.literal("add")
@@ -33,17 +54,65 @@ final class JoinNotifyCommand {
 						.then(ClientCommands.literal("auto").executes(c -> setLanguage(c.getSource(), mod, "auto")))
 						.then(ClientCommands.literal("en").executes(c -> setLanguage(c.getSource(), mod, "en")))
 						.then(ClientCommands.literal("ja").executes(c -> setLanguage(c.getSource(), mod, "ja"))))
-				.then(ClientCommands.literal("settings")
-						.executes(c -> showSettings(c.getSource(), mod))
-						.then(ClientCommands.literal("enabled")
-								.then(ClientCommands.argument("value", BoolArgumentType.bool())
-										.executes(c -> setEnabled(c.getSource(), mod, BoolArgumentType.getBool(c, "value")))))
-						.then(ClientCommands.literal("onlyWhenUnfocused")
-								.then(ClientCommands.argument("value", BoolArgumentType.bool())
-										.executes(c -> setOnlyWhenUnfocused(c.getSource(), mod,
-												BoolArgumentType.getBool(c, "value"))))))
+				.then(playerListNode("watchlist", PlayerList.WATCH, mod))
+				.then(playerListNode("blocklist", PlayerList.BLOCK, mod))
 				.then(ClientCommands.literal("reload").executes(c -> reload(c.getSource(), mod)))
-				.then(ClientCommands.literal("test").executes(c -> test(c.getSource(), mod))));
+				.then(ClientCommands.literal("test").executes(c -> test(c.getSource(), mod)));
+
+		// Each setting works both as /joinnotify <name> [value] and as /joinnotify settings <name> [value]
+		LiteralArgumentBuilder<FabricClientCommandSource> settings = ClientCommands.literal("settings")
+				.executes(c -> showSettings(c.getSource(), mod));
+		for (BoolSetting setting : BOOL_SETTINGS) {
+			root.then(boolNode(setting, mod));
+			settings.then(boolNode(setting, mod));
+		}
+		root.then(volumeNode(mod));
+		settings.then(volumeNode(mod));
+		root.then(settings);
+
+		dispatcher.register(root);
+	}
+
+	// ------------------------------------------------------------------ 設定（true/false など）
+
+	private static LiteralArgumentBuilder<FabricClientCommandSource> boolNode(BoolSetting setting,
+			PlayerJoinNotifierMod mod) {
+		return boolNode(setting, setting.name(), mod);
+	}
+
+	/** Same, but the command word may differ from the setting name (e.g. "watchlist enabled"). */
+	private static LiteralArgumentBuilder<FabricClientCommandSource> boolNode(BoolSetting setting, String word,
+			PlayerJoinNotifierMod mod) {
+		return ClientCommands.literal(word)
+				.executes(c -> {
+					boolean current = setting.get().apply(mod.config().get());
+					say(c.getSource(), "command.setting.value", setting.name(), String.valueOf(current));
+					return current ? 1 : 0;
+				})
+				.then(ClientCommands.argument("value", BoolArgumentType.bool()).executes(c -> {
+					boolean value = BoolArgumentType.getBool(c, "value");
+					mod.config().update(cfg -> setting.set().accept(cfg, value));
+					if (setting.restartSession()) {
+						mod.requestRestart();
+					}
+					say(c.getSource(), "command.settings.changed", setting.name(), String.valueOf(value));
+					return 1;
+				}));
+	}
+
+	private static LiteralArgumentBuilder<FabricClientCommandSource> volumeNode(PlayerJoinNotifierMod mod) {
+		return ClientCommands.literal("soundVolume")
+				.executes(c -> {
+					int current = mod.config().get().soundVolume;
+					say(c.getSource(), "command.setting.value", "soundVolume", String.valueOf(current));
+					return current;
+				})
+				.then(ClientCommands.argument("value", IntegerArgumentType.integer(0, 100)).executes(c -> {
+					int value = IntegerArgumentType.getInteger(c, "value");
+					mod.config().update(cfg -> cfg.soundVolume = value);
+					say(c.getSource(), "command.settings.changed", "soundVolume", String.valueOf(value));
+					return 1;
+				}));
 	}
 
 	private static void say(FabricClientCommandSource source, String key, Object... args) {
@@ -78,23 +147,80 @@ final class JoinNotifyCommand {
 	private static int showSettings(FabricClientCommandSource source, PlayerJoinNotifierMod mod) {
 		NotifierConfig cfg = mod.config().get();
 		say(source, "command.settings.header");
-		say(source, "command.settings.line", "enabled", state(cfg.enabled));
-		say(source, "command.settings.line", "onlyWhenUnfocused", state(cfg.onlyWhenUnfocused));
+		for (BoolSetting setting : BOOL_SETTINGS) {
+			say(source, "command.settings.line", setting.name(), String.valueOf(setting.get().apply(cfg)));
+		}
+		say(source, "command.settings.line", "soundVolume", String.valueOf(cfg.soundVolume));
 		say(source, "command.settings.line", "language", languageLabel(cfg.language));
+		say(source, "command.settings.line", "watchlist", String.valueOf(cfg.watchlist.size()));
+		say(source, "command.settings.line", "blocklist", String.valueOf(cfg.blocklist.size()));
 		return 1;
 	}
 
-	private static int setEnabled(FabricClientCommandSource source, PlayerJoinNotifierMod mod, boolean value) {
-		mod.config().update(c -> c.enabled = value);
-		mod.requestRestart();
-		say(source, "command.settings.changed", "enabled", state(value));
+	// ------------------------------------------------------------------ ウォッチリスト / ブロックリスト
+
+	private static LiteralArgumentBuilder<FabricClientCommandSource> playerListNode(String name, PlayerList which,
+			PlayerJoinNotifierMod mod) {
+		BoolSetting switchSetting = BOOL_SETTINGS.stream()
+				.filter(s -> s.name().equals(name + "Enabled")).findFirst().orElseThrow();
+		return ClientCommands.literal(name)
+				.executes(c -> showPlayers(c.getSource(), mod, which))
+				.then(boolNode(switchSetting, "enabled", mod))
+				.then(ClientCommands.literal("add")
+						.then(ClientCommands.argument("player", StringArgumentType.word())
+								.executes(c -> addPlayer(c.getSource(), mod, which, StringArgumentType.getString(c, "player")))))
+				.then(ClientCommands.literal("remove")
+						.then(ClientCommands.argument("player", StringArgumentType.word())
+								.executes(c -> removePlayer(c.getSource(), mod, which, StringArgumentType.getString(c, "player")))));
+	}
+
+	private static String listName(PlayerList which) {
+		return Texts.str(which == PlayerList.WATCH ? "command.list_name.watch" : "command.list_name.block");
+	}
+
+	private static List<String> entries(PlayerJoinNotifierMod mod, PlayerList which) {
+		NotifierConfig cfg = mod.config().get();
+		return which == PlayerList.WATCH ? cfg.watchlist : cfg.blocklist;
+	}
+
+	private static int showPlayers(FabricClientCommandSource source, PlayerJoinNotifierMod mod, PlayerList which) {
+		List<String> list = entries(mod, which);
+		boolean watch = which == PlayerList.WATCH;
+		NotifierConfig cfg = mod.config().get();
+		if (!(watch ? cfg.watchlistEnabled : cfg.blocklistEnabled)) {
+			say(source, watch ? "command.watchlist.disabled" : "command.blocklist.disabled");
+		}
+		if (list.isEmpty()) {
+			say(source, watch ? "command.watchlist.empty" : "command.blocklist.empty");
+		} else {
+			say(source, watch ? "command.watchlist.header" : "command.blocklist.header", list.size());
+			for (String entry : list) {
+				say(source, PlayerFilter.key(entry).isPresent() ? "command.player.entry" : "command.player.entry_invalid", entry);
+			}
+		}
+		return list.size();
+	}
+
+	private static int addPlayer(FabricClientCommandSource source, PlayerJoinNotifierMod mod, PlayerList which,
+			String player) {
+		switch (mod.config().addPlayer(which, player)) {
+			case ADDED -> {
+				say(source, "command.player.added", listName(which), player.strip());
+				if (which == PlayerList.WATCH && entries(mod, which).size() == 1) {
+					say(source, "command.watchlist.active_note");
+				}
+			}
+			case DUPLICATE -> say(source, "command.player.duplicate", listName(which), player.strip());
+			case INVALID -> say(source, "command.player.invalid", player);
+		}
 		return 1;
 	}
 
-	private static int setOnlyWhenUnfocused(FabricClientCommandSource source, PlayerJoinNotifierMod mod, boolean value) {
-		mod.config().update(c -> c.onlyWhenUnfocused = value);
-		say(source, "command.settings.changed", "onlyWhenUnfocused", state(value));
-		return 1;
+	private static int removePlayer(FabricClientCommandSource source, PlayerJoinNotifierMod mod, PlayerList which,
+			String player) {
+		int removed = mod.config().removePlayer(which, player);
+		say(source, removed > 0 ? "command.player.removed" : "command.player.not_found", listName(which), player.strip());
+		return removed;
 	}
 
 	private static int list(FabricClientCommandSource source, PlayerJoinNotifierMod mod) {
@@ -170,6 +296,9 @@ final class JoinNotifyCommand {
 		NotifierConfig cfg = mod.config().get();
 		mod.notifier().send(Texts.title(cfg), NotificationText.body(Texts.bodyTemplate(cfg), "TestPlayer"), cfg.icon,
 				cfg.timeoutMillis);
+		if (cfg.sound) {
+			mod.notifier().playChime(true, cfg.soundVolume);
+		}
 		say(source, "command.test.sent");
 		return 1;
 	}
